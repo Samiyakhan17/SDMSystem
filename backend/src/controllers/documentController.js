@@ -64,13 +64,13 @@ async function getDocument(req, res, next) {
   }
 }
 
-// PUT /api/documents/:id  (rename)
+// PUT /api/documents/:id  (rename and/or move to a folder)
 async function renameDocument(req, res, next) {
   try {
-    const { name } = req.body;
-    if (!name) {
+    const { name, folderId } = req.body;
+    if (!name && folderId === undefined) {
       res.status(400);
-      throw new Error('New name is required');
+      throw new Error('Provide a new name and/or a folderId to update');
     }
 
     const document = await Document.findById(req.params.id);
@@ -83,7 +83,23 @@ async function renameDocument(req, res, next) {
       throw new Error('You do not have access to this document');
     }
 
-    document.name = name;
+    if (name) {
+      document.name = name;
+    }
+
+    // folderId can be a real folder's id, or null to move back to "root"
+    if (folderId !== undefined) {
+      if (folderId !== null) {
+        const Folder = require('../models/Folder');
+        const folder = await Folder.findById(folderId);
+        if (!folder || folder.ownerId.toString() !== req.user.id.toString()) {
+          res.status(404);
+          throw new Error('Target folder not found');
+        }
+      }
+      document.folderId = folderId;
+    }
+
     await document.save();
 
     res.status(200).json({ success: true, document });
