@@ -1,6 +1,7 @@
 const { checkDocumentAccess } = require('../utils/checkAccess');
 const Document = require('../models/Document');
 const { uploadBuffer } = require('../services/storageService');
+const Version = require('../models/Version');
 
 // POST /api/documents  (multipart/form-data, field name: "file")
 async function uploadDocument(req, res, next) {
@@ -22,6 +23,14 @@ async function uploadDocument(req, res, next) {
       mimeType: req.file.mimetype,
       size: req.file.size,
       storageKey: result.secure_url, // Cloudinary's URL for this file
+    });
+    // Record this initial upload as version 1
+    await Version.create({
+      documentId: document._id,
+      versionNumber: 1,
+      storageKey: document.storageKey,
+      size: document.size,
+      uploadedBy: req.user.id,
     });
 
     res.status(201).json({ success: true, document });
