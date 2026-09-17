@@ -1,3 +1,4 @@
+const { checkDocumentAccess } = require('../utils/checkAccess');
 const Document = require('../models/Document');
 const { uploadBuffer } = require('../services/storageService');
 
@@ -53,9 +54,10 @@ async function getDocument(req, res, next) {
       throw new Error('Document not found');
     }
     // THE core security check from your plan: ownership before anything else
-    if (document.ownerId.toString() !== req.user.id.toString()) {
-      res.status(403);
-      throw new Error('You do not have access to this document');
+   const access = await checkDocumentAccess(document, req.user.id);
+    if (!access.allowed) {
+    res.status(403);
+    throw new Error('You do not have access to this document');
     }
 
     res.status(200).json({ success: true, document });
@@ -138,9 +140,10 @@ async function downloadDocument(req, res, next) {
       res.status(404);
       throw new Error('Document not found');
     }
-    if (document.ownerId.toString() !== req.user.id.toString()) {
+    const access = await checkDocumentAccess(document, req.user.id, 'download');
+    if (!access.allowed) {
       res.status(403);
-      throw new Error('You do not have access to this document');
+      throw new Error('You do not have permission to download this document');
     }
 
     res.status(200).json({ success: true, downloadUrl: document.storageKey });

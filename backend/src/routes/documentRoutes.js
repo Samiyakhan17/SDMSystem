@@ -9,10 +9,10 @@ const {
   deleteDocument,
   downloadDocument,
 } = require('../controllers/documentController');
+const { shareDocument, listShares, revokeShare } = require('../controllers/shareController');
 
 const router = express.Router();
 
-// Every route below this line requires a valid JWT
 router.use(protect);
 
 router.post('/', upload.single('file'), uploadDocument);
@@ -21,5 +21,8 @@ router.get('/:id', getDocument);
 router.put('/:id', renameDocument);
 router.delete('/:id', deleteDocument);
 router.get('/:id/download', downloadDocument);
+router.post('/:id/share', shareDocument);
+router.get('/:id/shares', listShares);
+router.delete('/:id/shares/:userId', revokeShare);
 
 module.exports = router;
