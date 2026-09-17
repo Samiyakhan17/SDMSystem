@@ -1,3 +1,4 @@
+const { logAction } = require('../services/auditService');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
@@ -26,7 +27,7 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const user = await User.create({ name, email, passwordHash });
-
+      await logAction({ userId: user._id, action: 'register' });
     res.status(201).json({
       success: true,
       user: { id: user._id, name: user.name, email: user.email, role: user.role },
@@ -59,13 +60,14 @@ async function login(req, res, next) {
       res.status(403);
       throw new Error('This account has been disabled');
     }
-
+     
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
       res.status(401);
+      await logAction({ userId: user._id, action: 'login_failed' });
       throw new Error('Invalid email or password');
     }
-
+    await logAction({ userId: user._id, action: 'login' });
     res.status(200).json({
       success: true,
       user: { id: user._id, name: user.name, email: user.email, role: user.role },

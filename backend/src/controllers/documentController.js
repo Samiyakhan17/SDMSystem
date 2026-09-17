@@ -1,3 +1,4 @@
+const { logAction } = require('../services/auditService');
 const { checkDocumentAccess } = require('../utils/checkAccess');
 const Document = require('../models/Document');
 const { uploadBuffer } = require('../services/storageService');
@@ -32,22 +33,47 @@ async function uploadDocument(req, res, next) {
       size: document.size,
       uploadedBy: req.user.id,
     });
-
+    await logAction({ userId: req.user.id, action: 'upload', documentId: document._id });
     res.status(201).json({ success: true, document });
   } catch (err) {
     next(err);
   }
 }
 
-// GET /api/documents
+// GET /api/documents?search=&mimeType=&folderId=&sort=&page=&limit=
 async function listDocuments(req, res, next) {
   try {
-    const documents = await Document.find({
-      ownerId: req.user.id,
-      isDeleted: false,
-    }).sort({ createdAt: -1 });
+    const { search, mimeType, folderId, sort = '-createdAt', page = 1, limit = 20 } = req.query;
 
-    res.status(200).json({ success: true, count: documents.length, documents });
+    const filter = { ownerId: req.user.id, isDeleted: false };
+
+    if (search) {
+      filter.name = { $regex: search, $options: 'i' }; // case-insensitive partial match
+    }
+    if (mimeType) {
+      filter.mimeType = mimeType;
+    }
+    if (folderId !== undefined) {
+      filter.folderId = folderId === 'null' ? null : folderId;
+    }
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [documents, total] = await Promise.all([
+      Document.find(filter).sort(sort).skip(skip).limit(limitNum),
+      Document.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: documents.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      documents,
+    });
   } catch (err) {
     next(err);
   }
@@ -134,7 +160,7 @@ async function deleteDocument(req, res, next) {
 
     document.isDeleted = true;
     await document.save();
-
+    await logAction({ userId: req.user.id, action: 'delete', documentId: document._id });
     res.status(200).json({ success: true, message: 'Document moved to trash' });
   } catch (err) {
     next(err);
@@ -154,7 +180,7 @@ async function downloadDocument(req, res, next) {
       res.status(403);
       throw new Error('You do not have permission to download this document');
     }
-
+      await logAction({ userId: req.user.id, action: 'download', documentId: document._id });
     res.status(200).json({ success: true, downloadUrl: document.storageKey });
   } catch (err) {
     next(err);

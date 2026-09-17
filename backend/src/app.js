@@ -36,6 +36,7 @@ app.get('/api/health', (req, res) => {
  app.use('/api/auth', require('./routes/authRoutes'));
  app.use('/api/documents', require('./routes/documentRoutes'));
  app.use('/api/folders', require('./routes/folderRoutes'));
+ app.use('/api/audit-logs', require('./routes/auditRoutes'));
 // app.use('/api/admin', require('./routes/adminRoutes'));
 
 // --- Error handling (must be last) ---

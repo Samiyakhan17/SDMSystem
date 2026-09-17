@@ -1,3 +1,4 @@
+const { logAction } = require('../services/auditService');
 const User = require('../models/User');
 const Document = require('../models/Document');
 const Share = require('../models/Share');
@@ -48,7 +49,13 @@ async function shareDocument(req, res, next) {
       },
       { new: true, upsert: true, runValidators: true }
     );
-
+    await logAction({
+      userId: req.user.id,
+      action: 'share',
+      documentId: document._id,
+      targetUserId: targetUser._id,
+      metadata: { permission },
+    });
     res.status(201).json({ success: true, share });
   } catch (err) {
     next(err);
@@ -101,7 +108,12 @@ async function revokeShare(req, res, next) {
       res.status(404);
       throw new Error('Share not found');
     }
-
+    await logAction({
+      userId: req.user.id,
+      action: 'unshare',
+      documentId: document._id,
+      targetUserId: req.params.userId,
+    });
     res.status(200).json({ success: true, message: 'Access revoked' });
   } catch (err) {
     next(err);
