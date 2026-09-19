@@ -38,7 +38,7 @@ async function listFolders(req, res, next) {
 
     const filter = {
       ownerId: req.user.id,
-      parentFolderId: parentFolderId || null,
+      parentFolderId: !parentFolderId || parentFolderId === 'null' ? null : parentFolderId,
     };
 
     const folders = await Folder.find(filter).sort({ name: 1 });
