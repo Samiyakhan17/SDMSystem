@@ -8,7 +8,7 @@ import ThreeLogo from '../../components/ThreeLogo';
 import {
   FileText, Image as ImageIcon, File as FileIcon, Upload, Download,
   Pencil, Trash2, Search, LogOut, FolderClosed, FolderPlus, Users,
-  Loader2, ChevronLeft,
+  Loader2, ChevronLeft, Share2,
 } from 'lucide-react';
 
 function fileIconFor(m) { if (m?.startsWith('image/')) return ImageIcon; if (m === 'application/pdf') return FileText; return FileIcon; }
@@ -81,6 +81,25 @@ export default function DashboardPage() {
     if (!window.confirm(`Move "${doc.name}" to trash?`)) return;
     try { setActionId(doc._id); await api.delete(`/documents/${doc._id}`); await fetchDocuments(search); }
     catch (err) { setError(err.response?.data?.message || 'Delete failed'); } finally { setActionId(null); }
+  }
+
+    async function handleShare(doc) {
+    const email = window.prompt('Share with (email):');
+    if (!email) return;
+    const permission = window.prompt('Permission - type: view, download, or edit', 'download');
+    if (!permission || !['view', 'download', 'edit'].includes(permission)) {
+      alert('Invalid permission. Must be view, download, or edit.');
+      return;
+    }
+    try {
+      setActionId(doc._id);
+      await api.post(`/documents/${doc._id}/share`, { email, permission });
+      alert(`Shared with ${email} (${permission} access)`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Share failed');
+    } finally {
+      setActionId(null);
+    }
   }
 
   async function handleCreateFolder() {
@@ -219,7 +238,8 @@ export default function DashboardPage() {
                   <div key={doc._id} className="group rounded-xl border border-white/10 bg-[#3d4551] p-4 shadow-lg shadow-black/20 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#526885]/40">
                     <div className="mb-3 flex items-start justify-between">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#526885]/20 text-[#8fa3bd]"><Icon size={20} /></div>
-                      <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                                            <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                        <button onClick={() => handleShare(doc)} disabled={isBusy} className="rounded p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"><Share2 size={15} /></button>
                         <button onClick={() => handleDownload(doc)} disabled={isBusy} className="rounded p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"><Download size={15} /></button>
                         <button onClick={() => handleRename(doc)} disabled={isBusy} className="rounded p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"><Pencil size={15} /></button>
                         <button onClick={() => handleDelete(doc)} disabled={isBusy} className="rounded p-1.5 text-gray-400 hover:bg-red-500/10 hover:text-red-400"><Trash2 size={15} /></button>
