@@ -20,10 +20,13 @@ import {
   Users,
   Loader2,
   ChevronLeft,
+  FolderInput,
   Share2,
   MoreVertical,
   LayoutDashboard,
   Settings,
+  Activity,
+  RotateCcw,
 } from 'lucide-react';
 
 function fileIconFor(m) {
@@ -53,6 +56,9 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [actionId, setActionId] = useState(null);
+  const [isTrash, setIsTrash] = useState(false);
+  const [isActivity, setIsActivity] = useState(false);
+  const [activities, setActivities] = useState([]);
 
   /* =========================
      AUTH
@@ -113,6 +119,23 @@ export default function DashboardPage() {
       setLoadingDocs(false);
     }
   }
+
+  async function fetchSharedDocuments() {
+  try {
+    setLoadingDocs(true);
+    setError('');
+
+    const { data } = await api.get('/documents/shared-with-me');
+
+    setSharedDocuments(data.documents || []);
+  } catch (err) {
+    setError(
+      err.response?.data?.message || 'Failed to load shared documents'
+    );
+  } finally {
+    setLoadingDocs(false);
+  }
+}
 
   /* =========================
      SEARCH
@@ -233,6 +256,124 @@ export default function DashboardPage() {
       setActionId(null);
     }
   }
+
+async function handleMove(doc) {
+  const folderOptions = [
+    { id: null, name: 'My Documents' },
+    ...folders.map((folder) => ({
+      id: folder._id,
+      name: folder.name,
+    })),
+  ];
+
+  const message =
+    'Move "' +
+    doc.name +
+    '" to:\n\n' +
+    folderOptions
+      .map((folder, index) => `${index + 1}. ${folder.name}`)
+      .join('\n') +
+    '\n\nEnter the folder number:';
+
+  const answer = window.prompt(message);
+
+  if (!answer) return;
+
+  const index = parseInt(answer, 10) - 1;
+
+  if (
+    Number.isNaN(index) ||
+    index < 0 ||
+    index >= folderOptions.length
+  ) {
+    alert('Invalid folder selection.');
+    return;
+  }
+
+  const targetFolder = folderOptions[index];
+
+  try {
+    setActionId(doc._id);
+
+    await api.put(`/documents/${doc._id}`, {
+      folderId: targetFolder.id,
+    });
+
+    await fetchDocuments(search);
+
+    alert(`"${doc.name}" moved to ${targetFolder.name}.`);
+  } catch (err) {
+    setError(
+      err.response?.data?.message || 'Move failed'
+    );
+  } finally {
+    setActionId(null);
+  }
+}
+
+async function handleRestore(doc) {
+  try {
+    setActionId(doc._id);
+    setError(null);
+
+    await api.put(`/documents/${doc._id}/restore`);
+
+    // Refresh Trash
+    const { data } = await api.get('/documents/trash');
+    setDocuments(data.documents || []);
+
+    alert(`"${doc.name}" restored successfully.`);
+  } catch (err) {
+    setError(
+      err.response?.data?.message || 'Failed to restore document'
+    );
+  } finally {
+    setActionId(null);
+  }
+}
+
+async function handlePermanentDelete(doc) {
+  const confirmed = window.confirm(
+    `Permanently delete "${doc.name}"?\n\nThis cannot be undone.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setActionId(doc._id);
+    setError(null);
+
+    await api.delete(`/documents/${doc._id}/permanent`);
+
+    // Refresh Trash
+    const { data } = await api.get('/documents/trash');
+    setDocuments(data.documents || []);
+
+    alert(`"${doc.name}" permanently deleted.`);
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+        'Failed to permanently delete document'
+    );
+  } finally {
+    setActionId(null);
+  }
+}
+
+async function fetchActivities() {
+  try {
+    setError(null);
+
+    const { data } = await api.get('/audit-logs');
+ console.log('AUDIT LOGS:', data);
+    setActivities(data.logs || data.auditLogs || []);
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+        'Failed to load activity'
+    );
+  }
+}
 
   async function handleShare(doc) {
     const email = window.prompt(
@@ -415,33 +556,75 @@ export default function DashboardPage() {
           </p>
 
           <button
-            onClick={() => setCurrentFolder(null)}
-            className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+             onClick={() => {
+             setCurrentFolder(null);
+              setIsTrash(false);
+              setIsActivity(false);
+                 fetchDocuments(search);
+                 }}
+              className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
               !currentFolder
                 ? 'bg-[#5A4A0D] text-white shadow-md'
                 : 'text-[#7A5E12] hover:bg-[#F3D789]/40'
-            }`}
-          >
+              }`}
+              >
             <LayoutDashboard size={17} />
             Dashboard
           </button>
 
           <button
-            onClick={() => setCurrentFolder(null)}
-            className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#7A5E12] transition hover:bg-[#F3D789]/40"
-          >
-            <FileText size={17} />
-            My Documents
+            type="button"
+              onClick={() => {
+                setCurrentFolder(null);
+                setIsTrash(false);
+                setIsActivity(false);
+               fetchDocuments(search);
+              }}
+              className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#7A5E12] transition hover:bg-[#F3D789]/40"
+              >
+          <FileText size={17} />
+          My Documents
           </button>
 
           <button
-             type="button"
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#7A5E12] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D]"
-               >
-              <Share2 size={18} strokeWidth={2} />
-              <span>Shared with me</span>
-          </button>
+               type="button"
+                onClick={async () => {
+               try {
+                 setCurrentFolder(null);
+                setIsTrash(true);
+                setIsActivity(false);
+                setError(null);
 
+                const { data } = await api.get('/documents/trash');
+
+                  setDocuments(data.documents || []);
+                   } catch (err) {
+                  setError(
+                  err.response?.data?.message || 'Failed to load trash'
+                  );
+                  }
+                 }}
+                 className="mb-3 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#7A5E12] transition hover:bg-[#F3D789]/40"
+                 >
+                 <Trash2 size={17} />
+                   Trash
+                </button>
+
+                <button
+                  type="button"
+                    onClick={async () => {
+                    setCurrentFolder(null);
+                       setIsTrash(false);
+                     setIsActivity(true);
+
+                 await fetchActivities();
+                         }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-[#5F6B55] transition hover:bg-[#EAF2E2] hover:text-[#3F542F]"
+                    >
+                    <Activity size={17} />
+                         Activity
+                      </button>
+ 
           {/* Folders */}
 
           <div className="mb-2 flex items-center justify-between px-3">
@@ -469,9 +652,11 @@ export default function DashboardPage() {
               >
 
                 <button
-                  onClick={() =>
-                    setCurrentFolder(folder)
-                  }
+                  onClick={() => {
+                        setIsTrash(false);
+                            setIsActivity(false);
+                             setCurrentFolder(folder);
+                        }}
                   className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                     currentFolder?._id === folder._id
                       ? 'bg-[#F3D789]/60 font-semibold text-[#5A4A0D]'
@@ -723,29 +908,7 @@ export default function DashboardPage() {
               </div>
 
             </div>
-
-            <div className="rounded-2xl border border-[#E8B84A]/30 bg-[#5A4A0D] p-4 shadow-sm">
-
-              <div className="flex items-center justify-between">
-
-                <div>
-                  <p className="text-xs font-medium text-[#F3D789]">
-                    Storage
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-white">
-                    Active
-                  </p>
-                </div>
-
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7A5E12] text-[#F3D789]">
-                  <Upload size={18} />
-                </div>
-
-              </div>
-
-            </div>
-
+ 
           </section>
 
           {/* =========================
@@ -874,137 +1037,229 @@ export default function DashboardPage() {
 
           )}
 
-          {/* =========================
-              DOCUMENTS
-          ========================= */}
+          {/* Activity */}
+{isActivity && (
+  <section className="overflow-hidden rounded-2xl border border-[#E8B84A]/30 bg-white shadow-sm">
+    <div className="border-b border-[#E8B84A]/20 px-5 py-4">
+      <h2 className="text-base font-semibold text-[#5A4A0D]">
+        Activity
+      </h2>
 
-          {loadingDocs ? (
+      <p className="mt-1 text-xs text-[#A67917]/70">
+        Recent activity on your documents and account
+      </p>
+    </div>
 
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#E8B84A]/25 bg-white py-12">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF3D8]">
-                <Loader2 className="h-5 w-5 animate-spin text-[#A67917]" />
-            </div>
+    {activities.length === 0 ? (
+      <div className="px-5 py-10 text-center text-sm text-[#8A7A52]">
+        No activity found.
+      </div>
+    ) : (
+      <div className="divide-y divide-[#E8B84A]/20">
+        {activities.map((activity) => {
+          let icon = '•';
+          let label = activity.action;
 
-             <p className="mt-3 text-sm font-semibold text-[#5A4A0D]">
-                 Loading documents
-             </p>
+          switch (activity.action) {
+            case 'login':
+              icon = '🔐';
+              label = 'Logged in';
+              break;
 
-              <p className="mt-1 text-xs text-[#A67917]/70">
-               Please wait a moment...
-              </p>
-              </div> 
+            case 'login_failed':
+              icon = '⚠️';
+              label = 'Failed login attempt';
+              break;
 
-          ) : documents.length === 0 ? (
+            case 'upload':
+              icon = '📤';
+              label = 'Document uploaded';
+              break;
 
-            <div className="rounded-2xl border-2 border-dashed border-[#E8B84A]/40 bg-white/60 px-6 py-12 text-center">
+            case 'download':
+              icon = '📥';
+              label = 'Document downloaded';
+              break;
 
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFF3D8] text-[#A67917]">
-                <Upload size={21} />
+            case 'rename':
+              icon = '✏️';
+              label = 'Document renamed';
+              break;
+
+            case 'delete':
+              icon = '🗑️';
+              label = 'Document deleted';
+              break;
+
+            case 'restore':
+              icon = '♻️';
+              label = 'Document restored';
+              break;
+
+            case 'share':
+              icon = '🔗';
+              label = 'Document shared';
+              break;
+
+            case 'revoke_share':
+              icon = '🔒';
+              label = 'Document sharing revoked';
+              break;
+
+            default:
+              label = activity.action;
+          }
+
+          return (
+            <div
+              key={activity._id}
+              className="flex items-center gap-4 px-5 py-4 transition hover:bg-[#FFF8E8]"
+            >
+              {/* Activity icon */}
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF3D8] text-lg">
+                {icon}
               </div>
 
-              <p className="text-sm font-semibold text-[#5A4A0D]">
-                No documents here yet
-              </p>
+              {/* Activity details */}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#5A4A0D]">
+                  {label}
+                </p>
 
-              <p className="mt-1 text-xs text-[#A67917]/70">
-                Upload your first document to get started.
-              </p>
-
-              <button
-                onClick={() =>
-                  fileInputRef.current?.click()
-                }
-                className="mt-4 rounded-lg bg-[#A67917] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#7A5E12]"
-              >
-                Upload Document
-              </button>
-
+                <p className="mt-1 text-xs text-[#A67917]/70">
+                  {new Date(activity.createdAt).toLocaleString()}
+                </p>
+              </div>
             </div>
-
-          ) : (
-
-        <section className="overflow-hidden rounded-2xl border border-[#E8B84A]/30 bg-white shadow-sm">
-  {documents.map((doc, index) => {
-    const Icon = fileIconFor(doc.mimeType);
-    const isBusy = actionId === doc._id;
-
-    return (
-      <div
-        key={doc._id}
-        className={`group flex items-center gap-4 px-4 py-3 transition hover:bg-[#FFF8E8] ${
-          index !== documents.length - 1
-            ? 'border-b border-[#E8B84A]/20'
-            : ''
-        }`}
-      >
-        {/* File icon */}
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF3D8] text-[#A67917]">
-          <Icon size={19} />
-        </div>
-
-        {/* Document information */}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#5A4A0D]">
-            {doc.name}
-          </p>
-
-          <div className="mt-1 flex items-center gap-2 text-[10px] text-[#A67917]/70">
-            <span>{formatSize(doc.size)}</span>
-            <span>•</span>
-            <span>Version {doc.currentVersion}</span>
-          </div>
-        </div>
-
-        {/* File type */}
-        <div className="hidden text-[10px] font-medium uppercase tracking-wide text-[#A67917]/60 sm:block">
-          {doc.mimeType?.split('/')[1] || 'FILE'}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleShare(doc)}
-            disabled={isBusy}
-            title="Share"
-            className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
-          >
-            <Share2 size={14} />
-          </button>
-
-          <button
-            onClick={() => handleDownload(doc)}
-            disabled={isBusy}
-            title="Download"
-            className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
-          >
-            <Download size={14} />
-          </button>
-
-          <button
-            onClick={() => handleRename(doc)}
-            disabled={isBusy}
-            title="Rename"
-            className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
-          >
-            <Pencil size={14} />
-          </button>
-
-          <button
-            onClick={() => handleDelete(doc)}
-            disabled={isBusy}
-            title="Delete"
-            className="rounded-lg p-2 text-[#A67917] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+          );
+        })}
       </div>
-    );
-  })}
-</section>
+    )}
+  </section>
+)}
 
-          )}
+{/* Documents */}
+{!isActivity && (
+  <section className="overflow-hidden rounded-2xl border border-[#E8B84A]/30 bg-white shadow-sm">
+    {documents.map((doc, index) => {
+      const Icon = fileIconFor(doc.mimeType);
+      const isBusy = actionId === doc._id;
 
+      return (
+        <div
+          key={doc._id}
+          className={`group flex items-center gap-4 px-4 py-3 transition hover:bg-[#FFF8E8] ${
+            index !== documents.length - 1
+              ? 'border-b border-[#E8B84A]/20'
+              : ''
+          }`}
+        >
+          {/* File icon */}
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF3D8] text-[#A67917]">
+            <Icon size={19} />
+          </div>
+
+          {/* Document information */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-[#5A4A0D]">
+              {doc.name}
+            </p>
+
+            <div className="mt-1 flex items-center gap-2 text-[10px] text-[#A67917]/70">
+              <span>{formatSize(doc.size)}</span>
+              <span>•</span>
+              <span>Version {doc.currentVersion}</span>
+            </div>
+          </div>
+
+          {/* File type */}
+          <div className="hidden text-[10px] font-medium uppercase tracking-wide text-[#A67917]/60 sm:block">
+            {doc.mimeType?.split('/')[1] || 'FILE'}
+          </div>
+
+          {/* Move */}
+          <button
+            onClick={() => handleMove(doc)}
+            disabled={isBusy}
+            title="Move to folder"
+            className="rounded-lg p-2 text-[#7E8F6A] transition hover:bg-[#EAF2E2] hover:text-[#4F633D] disabled:opacity-50"
+          >
+            <FolderInput size={14} />
+          </button>
+
+         {/* Actions */}
+<div className="flex items-center gap-1">
+  {isTrash ? (
+    <>
+      {/* Restore */}
+      <button
+        onClick={() => handleRestore(doc)}
+        disabled={isBusy}
+        title="Restore"
+        className="rounded-lg p-2 text-[#5F7A45] transition hover:bg-[#EAF2E2] hover:text-[#3F542F] disabled:opacity-50"
+      >
+        <RotateCcw size={14} />
+      </button>
+
+      {/* Delete permanently */}
+      <button
+        onClick={() => handlePermanentDelete(doc)}
+        disabled={isBusy}
+        title="Delete permanently"
+        className="rounded-lg p-2 text-[#A67917] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+      >
+        <Trash2 size={14} />
+      </button>
+    </>
+  ) : (
+    <>
+      {/* Share */}
+      <button
+        onClick={() => handleShare(doc)}
+        disabled={isBusy}
+        title="Share"
+        className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
+      >
+        <Share2 size={14} />
+      </button>
+
+      {/* Download */}
+      <button
+        onClick={() => handleDownload(doc)}
+        disabled={isBusy}
+        title="Download"
+        className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
+      >
+        <Download size={14} />
+      </button>
+
+      {/* Rename */}
+      <button
+        onClick={() => handleRename(doc)}
+        disabled={isBusy}
+        title="Rename"
+        className="rounded-lg p-2 text-[#A67917] transition hover:bg-[#FFF3D8] hover:text-[#5A4A0D] disabled:opacity-50"
+      >
+        <Pencil size={14} />
+      </button>
+
+      {/* Move to trash */}
+      <button
+        onClick={() => handleDelete(doc)}
+        disabled={isBusy}
+        title="Delete"
+        className="rounded-lg p-2 text-[#A67917] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+      >
+        <Trash2 size={14} />
+      </button>
+    </>
+  )}
+</div>
+        </div>
+      );
+    })}
+  </section>
+)}
         </main>
 
       </div>
