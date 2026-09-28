@@ -1,160 +1,536 @@
 # 🔐 SDMS — Secure Document Management System
 
-A full-stack document management platform where users can securely upload, organize, share, version, and audit their files — built end-to-end with the MERN stack.
+A full-stack document management platform designed to securely **upload, organize, share, version, and audit documents** with role-based access control and cloud storage.
 
-> Built as a portfolio project to demonstrate full-stack architecture, authentication/authorization, cloud file storage, and permission-based access control.
+> A secure document management system built with the MERN stack, Next.js, and cloud-based file storage.
+
+---
+
+## 🌐 Overview
+
+**SDMS (Secure Document Management System)** is a full-stack web application that allows users to securely manage their documents from a centralized dashboard.
+
+The system provides:
+
+- 🔐 JWT-based authentication
+- 👤 Role-based access control
+- 📁 Document and folder management
+- 🤝 Permission-based document sharing
+- ⏳ Share expiration
+- 🗂️ Document version history
+- 🔎 Search, filtering, and pagination
+- 📋 Activity and audit logging
+- ☁️ Cloud-based file storage
+- 🛡️ Multiple security layers
+
+The application uses **Next.js** for the frontend, **Node.js and Express.js** for the REST API, **MongoDB** for structured data, and **Cloudinary** for file storage.
+
+---
+
+## 📸 UI Preview
+
+### 🏠 Landing Page
+
+![SDMS Landing Page](./screenshots/landing-page.png)
+
+### 📂 Dashboard
+
+![SDMS Dashboard](./screenshots/dashboard.png)
+
+### 📋 Activity
+
+![SDMS Activity](./screenshots/activity.png)
 
 ---
 
 ## ✨ Features
 
-**Authentication & Security**
-- JWT-based authentication with bcrypt password hashing
-- Rate-limited login endpoint to blunt brute-force attempts
-- Role-based access (user/admin)
-- Ownership + permission checks enforced on every document operation
+### 🔐 Authentication & Security
 
-**Document Management**
-- Upload, rename, delete (soft delete/trash), and download documents
-- Cloud storage via Cloudinary (no files stored on the app server)
-- File type and size validation on upload
+- JWT-based authentication
+- Password hashing with bcrypt
+- Role-based access control (`user` / `admin`)
+- Rate-limited authentication endpoints
+- Ownership and permission checks for document operations
+- Centralized error handling
+- Security headers with Helmet
+- NoSQL injection protection
+- Environment variables for sensitive configuration
 
-**Folders**
-- Create, rename, delete folders
+---
+
+### 📄 Document Management
+
+Users can:
+
+- Upload documents
+- Rename documents
+- Download documents
+- Soft-delete documents
+- Organize documents into folders
 - Move documents between folders
-- Folder deletion blocked while non-empty (prevents orphaned files)
+- Search documents
+- Filter documents by type and folder
+- Upload new versions of existing documents
 
-**Sharing & Permissions**
-- Share any document with another registered user by email
-- Three permission levels: `view`, `download`, `edit`
-- Owner can view and revoke active shares at any time
+Files are stored in **Cloudinary**, while MongoDB stores document metadata and storage references.
+
+---
+
+### 📁 Folder Management
+
+- Create folders
+- Rename folders
+- Delete folders
+- Move documents between folders
+- Prevent deletion of non-empty folders
+
+Folder deletion is blocked while documents are still associated with the folder.
+
+---
+
+### 🤝 Sharing & Permissions
+
+Documents can be shared with other registered users using their email address.
+
+Supported permission levels:
+
+| Permission | Access |
+|---|---|
+| `view` | View document information |
+| `download` | View and download document |
+| `edit` | Modify document |
+
+Sharing also supports:
+
+- Viewing active shares
+- Revoking access
 - Optional share expiration
+- Permission validation on protected operations
 
-**Version History**
-- Every upload automatically creates version 1
-- Uploading a new version preserves the previous file and increments the version number
-- Full version history retrievable per document
+---
 
-**Search & Audit Logging**
-- Case-insensitive document search, filtering by type/folder, and pagination
-- Every sensitive action (login, upload, download, share, delete, etc.) is logged with timestamp and actor
+### 🗂️ Version History
 
-**Frontend**
-- Built with Next.js (App Router) + Tailwind CSS
-- Protected dashboard with real-time document grid
-- Drag-free upload, inline rename/delete/download/share actions
-- Custom dark theme with a Three.js-rendered animated logo
+SDMS maintains previous versions of documents instead of simply replacing the existing file.
+
+- Initial upload creates **Version 1**
+- Uploading a new version increments the version number
+- Previous versions remain preserved
+- Version history can be retrieved for each document
+
+---
+
+### 🔎 Search
+
+Documents can be:
+
+- Searched case-insensitively
+- Filtered by file type
+- Filtered by folder
+- Paginated
+
+---
+
+### 📋 Activity & Audit Logging
+
+Sensitive actions are recorded in the activity/audit log.
+
+Logged actions can include:
+
+- Login
+- Upload
+- Download
+- Share
+- Rename
+- Delete
+- Version upload
+- Other sensitive document operations
+
+Each activity record contains information such as the acting user and timestamp.
 
 ---
 
 ## 🏗️ Architecture
-User → Next.js Frontend → Express REST API → MongoDB (metadata) + Cloudinary (files)
 
+```text
+┌──────────────────────┐
+│    Next.js Frontend  │
+│  React + Tailwind    │
+└──────────┬───────────┘
+           │
+           │ REST API
+           ▼
+┌──────────────────────┐
+│    Express.js API    │
+│                      │
+│ Authentication       │
+│ Authorization        │
+│ Business Logic       │
+│ Validation           │
+└───────┬────────┬─────┘
+        │        │
+        ▼        ▼
+┌────────────┐  ┌──────────────┐
+│  MongoDB   │  │  Cloudinary  │
+│            │  │              │
+│ Users      │  │ File Storage │
+│ Documents  │  │              │
+│ Folders    │  │              │
+│ Shares     │  │              │
+│ Versions   │  │              │
+│ Audit Logs │  │              │
+└────────────┘  └──────────────┘
+```
 
-- **MongoDB** stores all structured data: users, documents, folders, shares, versions, audit logs
-- **Cloudinary** stores the actual file bytes — MongoDB only stores a reference to it
-- Every document request passes through a centralized permission check: *owner? → active share? → sufficient permission level? → not expired?*
+### Data Storage
+
+**MongoDB** stores structured application data:
+
+- Users
+- Documents
+- Folders
+- Shares
+- Versions
+- Audit logs
+
+**Cloudinary** stores the actual uploaded files.
+
+MongoDB stores references to the files rather than storing the file bytes directly.
+
+---
+
+## 🛡️ Permission Model
+
+Protected document operations follow an authorization flow:
+
+```text
+Request
+   │
+   ▼
+Authenticated User?
+   │
+   ├── No ──► Reject
+   │
+   ▼
+Is User the Owner?
+   │
+   ├── Yes ──► Allow
+   │
+   ▼
+Active Share Exists?
+   │
+   ├── No ──► Reject
+   │
+   ▼
+Required Permission?
+   │
+   ├── No ──► Reject
+   │
+   ▼
+Share Still Active?
+   │
+   ├── No ──► Reject
+   │
+   ▼
+Allow Operation
+```
+
+This ensures that access to protected resources is explicitly authorized.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer          | Technology                                  |
-|----------------|----------------------------------------------|
-| Frontend       | Next.js, React, Tailwind CSS, Three.js       |
-| Backend        | Node.js, Express.js                          |
-| Database       | MongoDB + Mongoose                           |
-| Authentication | JWT, bcrypt                                  |
-| File Storage   | Cloudinary                                   |
-| Upload Handling| Multer                                       |
-| Security       | Helmet, CORS, express-rate-limit, express-mongo-sanitize |
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js, React, Tailwind CSS, Three.js |
+| Backend | Node.js, Express.js |
+| Database | MongoDB, Mongoose |
+| Authentication | JWT, bcrypt |
+| File Storage | Cloudinary |
+| File Uploads | Multer |
+| Security | Helmet, CORS, express-rate-limit, express-mongo-sanitize |
 
 ---
 
 ## 📁 Project Structure
 
+```text
 sdms/
+│
 ├── backend/
-│ └── src/
-│ ├── config/ # DB + Cloudinary connections
-│ ├── controllers/ # Business logic per resource
-│ ├── middleware/ # Auth, role checks, upload, error handling
-│ ├── models/ # Mongoose schemas
-│ ├── routes/ # Express route definitions
-│ ├── services/ # Reusable logic (storage, audit logging)
-│ └── utils/ # Shared helpers (JWT, permission checks)
-└── frontend/
-├── app/ # Next.js pages (login, register, dashboard)
-├── components/ # Reusable UI components
-└── lib/ # API client + auth context
+│   └── src/
+│       ├── config/          # Database & Cloudinary configuration
+│       ├── controllers/     # Business logic
+│       ├── middleware/      # Authentication, authorization, uploads & errors
+│       ├── models/          # Mongoose schemas
+│       ├── routes/          # Express API routes
+│       ├── services/        # Storage & audit services
+│       └── utils/           # JWT & permission helpers
+│
+├── frontend/
+│   ├── app/                 # Next.js App Router pages
+│   ├── components/          # Reusable UI components
+│   └── lib/                 # API client & authentication utilities
+│
+├── screenshots/
+│   ├── landing-page.png
+│   ├── dashboard.png
+│   └── activity.png
+│
+└── README.md
+```
 
 ---
 
 ## 🔌 API Overview
 
-| Method | Endpoint                              | Description                       |
-|--------|----------------------------------------|------------------------------------|
-| POST   | `/api/auth/register`                  | Create account                     |
-| POST   | `/api/auth/login`                     | Login                               |
-| GET    | `/api/auth/me`                        | Current user (protected)           |
-| POST   | `/api/documents`                      | Upload a document                  |
-| GET    | `/api/documents`                      | List/search documents              |
-| GET    | `/api/documents/:id`                  | Document details                   |
-| PUT    | `/api/documents/:id`                  | Rename / move to folder            |
-| DELETE | `/api/documents/:id`                  | Delete (soft)                      |
-| GET    | `/api/documents/:id/download`         | Get secure download link           |
-| POST   | `/api/documents/:id/share`            | Share with another user            |
-| GET    | `/api/documents/:id/shares`           | List a document's shares           |
-| DELETE | `/api/documents/:id/shares/:userId`   | Revoke access                      |
-| POST   | `/api/documents/:id/versions`         | Upload a new version                |
-| GET    | `/api/documents/:id/versions`         | Version history                    |
-| POST   | `/api/folders`                        | Create folder                      |
-| GET    | `/api/folders`                        | List folders                       |
-| PUT    | `/api/folders/:id`                    | Rename folder                      |
-| DELETE | `/api/folders/:id`                    | Delete folder (must be empty)      |
-| GET    | `/api/audit-logs`                     | View your own activity history     |
+### Authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Create an account |
+| `POST` | `/api/auth/login` | Authenticate user |
+| `GET` | `/api/auth/me` | Get current authenticated user |
+
+### Documents
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/documents` | Upload a document |
+| `GET` | `/api/documents` | List/search documents |
+| `GET` | `/api/documents/:id` | Get document details |
+| `PUT` | `/api/documents/:id` | Rename/move document |
+| `DELETE` | `/api/documents/:id` | Soft-delete document |
+| `GET` | `/api/documents/:id/download` | Get secure download link |
+
+### Sharing
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/documents/:id/share` | Share document |
+| `GET` | `/api/documents/:id/shares` | List document shares |
+| `DELETE` | `/api/documents/:id/shares/:userId` | Revoke access |
+
+### Versions
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/documents/:id/versions` | Upload a new version |
+| `GET` | `/api/documents/:id/versions` | Get version history |
+
+### Folders
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/folders` | Create folder |
+| `GET` | `/api/folders` | List folders |
+| `PUT` | `/api/folders/:id` | Rename folder |
+| `DELETE` | `/api/folders/:id` | Delete folder |
+
+### Activity
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/audit-logs` | View activity history |
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js
-- A free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) cluster
-- A free [Cloudinary](https://cloudinary.com) account
 
-### Backend setup
+Make sure you have:
+
+- Node.js installed
+- MongoDB Atlas account
+- Cloudinary account
+- Git
+
+---
+
+### 1. Clone the Repository
+
+```bash
+git clone <https://github.com/Samiyakhan17/SDMSystem,>
+cd sdms
+```
+
+---
+
+### 2. Backend Setup
+
 ```bash
 cd backend
 npm install
-cp .env.example .env   # then fill in your MongoDB URI, JWT secret, and Cloudinary keys
+```
+
+Create your environment file:
+
+```bash
+cp .env.example .env
+```
+
+Add your configuration:
+
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+Start the backend:
+
+```bash
 npm run dev
 ```
 
-### Frontend setup
+---
+
+### 3. Frontend Setup
+
+Open another terminal:
+
 ```bash
 cd frontend
 npm install
+```
+
+Create your environment file:
+
+```bash
 cp .env.local.example .env.local
+```
+
+Start the frontend:
+
+```bash
 npm run dev
 ```
 
-Visit `http://localhost:3000`.
+The application will be available at:
+
+```text
+http://localhost:3000
+```
 
 ---
 
 ## 🔒 Security Highlights
 
-- Passwords never stored in plaintext (bcrypt hashing)
-- Every document/folder operation checks ownership *before* checking shared access — no operation succeeds without an explicit authorization check
-- Rate limiting on authentication endpoints
-- Centralized error handling — no stack traces leaked in production
-- `.env` files excluded from version control; `.env.example` provided for setup
-- Input sanitization against NoSQL injection (`express-mongo-sanitize`)
-- Security headers via Helmet
+SDMS uses multiple layers of security throughout the application.
+
+### Authentication
+
+- Passwords are never stored in plaintext
+- Passwords are hashed using bcrypt
+- JWT is used for authentication
+- Protected routes require authentication
+
+### Authorization
+
+Sensitive document operations verify:
+
+```text
+Authenticated User
+        ↓
+Resource Ownership
+        ↓
+Active Share
+        ↓
+Required Permission
+        ↓
+Share Expiration
+```
+
+### API Security
+
+- Helmet security headers
+- CORS configuration
+- Authentication rate limiting
+- NoSQL injection protection
+- Centralized error handling
+- Sensitive configuration stored in environment variables
 
 ---
 
-## 📝 License
+## ☁️ File Storage
 
-This project is open source and available under the [MIT License](LICENSE).
+SDMS separates application metadata from file storage.
+
+```text
+User uploads document
+          │
+          ▼
+        Multer
+          │
+          ▼
+      Cloudinary
+          │
+          ▼
+     File reference
+          │
+          ▼
+       MongoDB
+```
+
+The application server does not permanently store uploaded documents. Cloudinary handles the actual file storage while MongoDB stores the associated metadata and references.
+
+---
+
+## 🎨 Frontend
+
+The frontend is built using:
+
+- Next.js App Router
+- React
+- Tailwind CSS
+- Three.js
+
+The interface provides:
+
+- Document management
+- Folder organization
+- File uploads
+- Document sharing
+- Permission management
+- Version management
+- Activity history
+- Search and filtering
+
+---
+
+## 🔮 Future Improvements
+
+Potential future improvements include:
+
+- [ ] Admin analytics dashboard
+- [ ] Bulk document operations
+- [ ] Advanced document preview
+- [ ] Email notifications for document sharing
+- [ ] More granular permission management
+- [ ] Automated testing
+- [ ] CI/CD pipeline
+- [ ] Additional storage providers
+- [ ] Document activity timeline
+- [ ] Improved mobile experience
+
+---
+
+## 📌 Project Status
+
+**Status: ✅ Completed**
+
+SDMS currently provides secure document storage, organization, sharing, permission management, version history, search, and activity logging through a full-stack web application.
+
+---
+
+👩‍💻 Author
+
+Samiya Khan
+
+Built as a full-stack project focused on backend engineering, API development, and modern web application development.
