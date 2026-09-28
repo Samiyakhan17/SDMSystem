@@ -120,4 +120,49 @@ async function revokeShare(req, res, next) {
   }
 }
 
-module.exports = { shareDocument, listShares, revokeShare };
+// GET /api/documents/shared-with-me
+async function listSharedWithMe(req, res, next) {
+  try {
+    const now = new Date();
+
+    const shares = await Share.find({
+      sharedWithUserId: req.user.id,
+      $or: [
+        { expiresAt: null },
+        { expiresAt: { $gt: now } },
+      ],
+    })
+      .populate({
+        path: 'documentId',
+        match: { isDeleted: false },
+      })
+      .populate('ownerId', 'name email')
+      .sort({ createdAt: -1 });
+
+    const documents = shares
+      .filter((share) => share.documentId)
+      .map((share) => ({
+        ...share.documentId.toObject(),
+        permission: share.permission,
+        shareId: share._id,
+        sharedAt: share.createdAt,
+        expiresAt: share.expiresAt,
+        owner: share.ownerId,
+      }));
+
+    res.status(200).json({
+      success: true,
+      count: documents.length,
+      documents,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  shareDocument,
+  listShares,
+  revokeShare,
+  listSharedWithMe,
+};

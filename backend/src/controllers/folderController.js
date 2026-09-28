@@ -80,27 +80,47 @@ async function renameFolder(req, res, next) {
 async function deleteFolder(req, res, next) {
   try {
     const folder = await Folder.findById(req.params.id);
+
     if (!folder) {
       res.status(404);
       throw new Error('Folder not found');
     }
+
     if (folder.ownerId.toString() !== req.user.id.toString()) {
       res.status(403);
       throw new Error('You do not have access to this folder');
     }
 
-    // Safety check: don't allow deleting a folder that still has documents or subfolders.
-    // This prevents silently "orphaning" files - the user has to move or delete them first.
-    const docCount = await Document.countDocuments({ folderId: folder._id, isDeleted: false });
-    const subfolderCount = await Folder.countDocuments({ parentFolderId: folder._id });
+    const docCount = await Document.countDocuments({
+      folderId: folder._id,
+      isDeleted: false,
+    });
+
+    const subfolderCount = await Folder.countDocuments({
+      parentFolderId: folder._id,
+    });
+
+    console.log('DELETE FOLDER DEBUG:', {
+      folderId: folder._id.toString(),
+      folderName: folder.name,
+      docCount,
+      subfolderCount,
+    });
 
     if (docCount > 0 || subfolderCount > 0) {
       res.status(400);
-      throw new Error('Folder is not empty. Move or delete its contents first.');
+
+      throw new Error(
+        `Folder is not empty. Documents: ${docCount}, Subfolders: ${subfolderCount}`
+      );
     }
 
     await folder.deleteOne();
-    res.status(200).json({ success: true, message: 'Folder deleted' });
+
+    res.status(200).json({
+      success: true,
+      message: 'Folder deleted',
+    });
   } catch (err) {
     next(err);
   }

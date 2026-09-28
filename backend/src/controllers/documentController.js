@@ -1,7 +1,10 @@
 const { logAction } = require('../services/auditService');
 const { checkDocumentAccess } = require('../utils/checkAccess');
 const Document = require('../models/Document');
-const { uploadBuffer } = require('../services/storageService');
+const {
+  uploadBuffer,
+  deleteFile,
+} = require('../services/storageService');
 const Version = require('../models/Version');
 
 // POST /api/documents  (multipart/form-data, field name: "file")
@@ -187,6 +190,117 @@ async function downloadDocument(req, res, next) {
   }
 }
 
+// GET /api/documents/trash
+async function listTrash(req, res, next) {
+  try {
+    const documents = await Document.find({
+      ownerId: req.user.id,
+      isDeleted: true,
+    }).sort('-updatedAt');
+
+    res.status(200).json({
+      success: true,
+      count: documents.length,
+      documents,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/documents/:id/restore
+async function restoreDocument(req, res, next) {
+  try {
+    const document = await Document.findById(req.params.id);
+
+    if (!document || !document.isDeleted) {
+      res.status(404);
+      throw new Error('Document not found in trash');
+    }
+
+    if (document.ownerId.toString() !== req.user.id.toString()) {
+      res.status(403);
+      throw new Error('You do not have access to this document');
+    }
+
+    document.isDeleted = false;
+    await document.save();
+
+    await logAction({
+      userId: req.user.id,
+      action: 'restore',
+      documentId: document._id,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Document restored',
+      document,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/documents/:id/permanent
+async function permanentlyDeleteDocument(req, res, next) {
+  try {
+    console.log('PERMANENT DELETE ID:', req.params.id);
+    console.log('USER ID:', req.user.id);
+
+    const document = await Document.findById(req.params.id);
+
+    console.log('DOCUMENT FOUND:', document);
+
+    if (!document) {
+      res.status(404);
+      throw new Error('Document not found');
+    }
+
+    console.log('IS DELETED:', document.isDeleted);
+    console.log('OWNER ID:', document.ownerId);
+
+    if (!document.isDeleted) {
+      res.status(400);
+      throw new Error('Document is not in trash');
+    }
+
+    if (
+      document.ownerId.toString() !==
+      req.user.id.toString()
+    ) {
+      res.status(403);
+      throw new Error('You do not have access to this document');
+    }
+
+    console.log(
+      'PERMANENT DELETE STORAGE KEY:',
+      document.storageKey
+    );
+
+    await deleteFile(document.storageKey);
+
+    console.log('CLOUDINARY DELETE SUCCESS');
+
+    await Version.deleteMany({
+      documentId: document._id,
+    });
+
+    await document.deleteOne();
+
+    console.log('MONGODB DOCUMENT DELETED');
+
+    res.status(200).json({
+      success: true,
+      message: 'Document permanently deleted',
+    });
+  } catch (err) {
+    console.error('PERMANENT DELETE ERROR:', err);
+    next(err);
+  }
+}
+
+
 module.exports = {
   uploadDocument,
   listDocuments,
@@ -194,4 +308,7 @@ module.exports = {
   renameDocument,
   deleteDocument,
   downloadDocument,
+  listTrash,
+  restoreDocument,
+ permanentlyDeleteDocument,
 };
